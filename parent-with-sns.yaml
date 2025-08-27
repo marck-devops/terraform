@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Parent stack that creates SNS and deploys network nested stack with notifications
+
+Parameters:
+  EmailAddress:
+    Type: String
+    Description: Email address to subscribe to the SNS topic for stack notifications
+  ChildTemplateUrl:
+    Type: String
+    Description: S3 URL of the child template (network.yaml) to be used for the nested stack
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  PublicSubnetCidrs:
+    Type: List<String>
+    Default: [10.0.10.0/24, 10.0.20.0/24]
+  PrivateSubnetCidrs:
+    Type: List<String>
+    Default: [10.0.30.0/24, 10.0.40.0/24]
+  AvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Default: [us-east-1a, us-east-1b]
+
+Resources:
+  StackNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Stack Notifications
+      TopicName: !Sub "${AWS::StackName}-stack-events"
+
+  StackNotificationsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref StackNotificationsTopic
+      Protocol: email
+      Endpoint: !Ref EmailAddress
+
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref ChildTemplateUrl
+      Parameters:
+        VpcCidr: !Ref VpcCidr
+        PublicSubnetCidrs: !Join [",", !Ref PublicSubnetCidrs]
+        PrivateSubnetCidrs: !Join [",", !Ref PrivateSubnetCidrs]
+        AvailabilityZones: !Join [",", !Ref AvailabilityZones]
+      NotificationARNs:
+        - !Ref StackNotificationsTopic
+
+Outputs:
+  TopicArn:
+    Value: !Ref StackNotificationsTopic
+  NestedStackId:
+    Value: !Ref NetworkStack
